@@ -9,78 +9,114 @@ Output: images, poses, bds, render_pose, itest;
 poses (是指的 c2w 的pose)
 '''
 
-def load_kitti360_data(basedir, factor=8):
-    poses, imgs, K, i_test =_load_data(basedir,factor= factor)
+def load_kitti360_data(datadir, factor=8):
+    poses, imgs, K, i_test =_load_data(datadir)
     H,W = imgs.shape[1:3]
     focal = K[0][0]
 
     ## 设第一张相机的Pose 是单位矩阵，对其他相机的Pose 需要进行调整为相对于第一帧的Pose 相对位姿
     poses = Normailize_T(poses)   ## 对于 平移translation 进行归一化
 
-
     render_pose = np.stack(poses[i] for i in i_test)
 
     '''     Visual Camera Pose 
-     visualizer = CameraPoseVisualizer([-5, 5], [-5, 5], [0, 5])
-    for i in np.arange(render_pose.shape[0]):
-        if i % 1 == 0:
-            visualizer.extrinsic2pyramid(render_pose[i], 'y', 10)
-    visualizer.show()
+    
     '''
+    visualizer = CameraPoseVisualizer([-5, 5], [-5, 5], [0, 5])
+    for i in np.arange(poses.shape[0]):
+        if i % 1 == 0:
+            visualizer.extrinsic2pyramid(poses[i])
+    visualizer.show()
+
 
     return poses,imgs,render_pose,[H,W,focal],i_test
 
 
-def _load_data(basedir, factor = None, width=None,height=None,end_iterion=424):
-    imgs_idx =[]
-    c2w=[]
-    cam2world_file = os.path.join(basedir,'cam0_to_world.txt')
-    with open(cam2world_file) as f:
+def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
+    '''Load intrinstic matrix'''
+    intrinstic_file = os.path.join(os.path.join(datadir, 'calibration'), 'perspective.txt')
+    with open(intrinstic_file) as f:
         lines = f.readlines()
         for line in lines:
-            if end_iterion <= 10:
-                lineData = line.strip().split()
-                imgs_idx.append(eval(lineData[0]))
-                c2w.append(np.array(lineData[1:]).astype(np.float).reshape(4,4))
+            lineData = line.strip().split()
+            if lineData[0] == 'P_rect_00:':
+                K_00 = np.array(lineData[1:]).reshape(3,4).astype(np.float)
+            elif lineData[0] == 'P_rect_01:':
+                K_01 = np.array(lineData[1:]).reshape(3,4).astype(np.float)
+            elif lineData[0] == 'R_rect_01:':
+                R_rect_01 = np.eye(4)
+                R_rect_01[:3,:3] = np.array(lineData[1:]).reshape(3,3).astype(np.float)
 
-            end_iterion -= 1
-            if end_iterion < 0:
-                break
-    c2w = np.array(c2w).astype(np.float32)
-    print("cam2world Loaded!")
+    '''Load extrinstic matrix'''
+    CamPose_00 = {}
+    CamPose_01 = {}
+    extrinstic_file = os.path.join(datadir,os.path.join('data_poses',sequence))
+    cam2world_file_00 = os.path.join(extrinstic_file,'cam0_to_world.txt')
+    pose_file = os.path.join(extrinstic_file,'poses.txt')
 
-    ''' Load corrlected images'''
+
+    ''' Camera_00  to world coordinate '''
+    with open(cam2world_file_00,'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            lineData = list(map(float,line.strip().split()))
+            CamPose_00[lineData[0]] = np.array(lineData[1:]).reshape(4,4)
+
+    ''' Camera_01 to world coordiante '''
+    CamToPose_01 = loadCameraToPose(os.path.join(os.path.join(datadir, 'calibration'),'calib_cam_to_pose.txt'))
+    poses = np.loadtxt(pose_file)
+    frames = poses[:, 0]
+    poses = np.reshape(poses[:, 1:], [-1, 3, 4])
+    for frame, pose in zip(frames, poses):
+        pose = np.concatenate((pose, np.array([0., 0., 0., 1.]).reshape(1, 4)))
+        pp = np.matmul(pose, CamToPose_01)
+        CamPose_01[frame] = np.matmul(pp, np.linalg.inv(R_rect_01))
+
+
+
+    ''' Load corrlected images camera 00--> index    camera 01----> index+1'''
     def imread(f):
         if f.endswith('png'):
             return imageio.imread(f, ignoregamma=True)
         else:
             return imageio.imread(f)
 
-    imgae_dir = os.path.join(basedir,'2013_05_28_drive_0000_sync/image_00/data_rect')
+    imgae_dir = os.path.join(datadir,sequence)
+    image_00 = os.path.join(imgae_dir,'image_00/data_rect')
+    image_01 = os.path.join(imgae_dir,'image_01/data_rect')
 
-    imga_file = [os.path.join(imgae_dir,f"{'%010d'% idx}.png") for idx in imgs_idx ]  ##"010d“ 将 idx前面补成10位
-    # length = len(imga_file)
-    imgs = [imread(f)[...,:3]/255. for f in imga_file]
-    for i,idx in enumerate(imgs_idx):
-        cv.imwrite(f"train/{'%010d'% idx}.png", imgs[i] * 255)
+    start_index = 505
+    num = 5
+    all_images = []
+    all_poses = []
 
-    imgs = np.stack(imgs,-1)
+    for idx in range(start_index,start_index+num,1):
+        ## read image_00
+        image = imread(os.path.join(image_00,"{:010d}.png").format(idx))/255.0
+        all_images.append(image)
+        all_poses.append(CamPose_00[idx])
+
+        ## read image_01
+        image = imread(os.path.join(image_01, "{:010d}.png").format(idx))/255.0
+        all_images.append(image)
+        all_poses.append(CamPose_01[idx])
+
+
+    #
+    # imga_file = [os.path.join(imgae_dir,f"{'%010d'% idx}.png") for idx in imgs_idx ]  ##"010d“ 将 idx前面补成10位
+    # # length = len(imga_file)
+    # imgs = [imread(f)[...,:3]/255. for f in imga_file]
+    # for i,idx in enumerate(imgs_idx):
+    #     cv.imwrite(f"train/{'%010d'% idx}.png", imgs[i] * 255)
+
+    imgs = np.stack(all_images,-1)
     imgs = np.moveaxis(imgs, -1, 0)
-
-    '''Load intrinstic matrix'''
-    intrinstic_file = os.path.join(basedir,'perspective.txt')
-    with open(intrinstic_file) as f:
-        lines = f.readlines()
-        for line in lines:
-            lineData = line.strip().split()
-            if lineData[0] == 'P_rect_00:':
-                K = [float(x) for x in lineData[1:]]
-                K = np.array(K).reshape(3,4)[:,:3]
+    c2w = np.stack(all_poses)
 
     '''Generate test file'''
-    i_test = np.array([5,7])
+    i_test = np.array([3,4])
 
-    return c2w,imgs,K,i_test
+    return c2w,imgs, K_00,i_test
 
 def Normailize_T(poses):
     for i,pose in enumerate(poses):
@@ -92,3 +128,17 @@ def Normailize_T(poses):
     return poses
 
 
+def loadCameraToPose(filename):
+    # open file
+    Tr = {}
+    lastrow = np.array([0, 0, 0, 1]).reshape(1, 4)
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            lineData = list(line.strip().split())
+            if lineData[0] == 'image_01:':
+                data = np.array(lineData[1:]).reshape(3,4).astype(np.float)
+                data = np.concatenate((data,lastrow), axis=0)
+                Tr[lineData[0]] = data
+
+    return Tr['image_01:']
