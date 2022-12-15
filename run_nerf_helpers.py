@@ -148,8 +148,51 @@ class NeRF(nn.Module):
         self.alpha_linear.bias.data = torch.from_numpy(np.transpose(weights[idx_alpha_linear+1]))
 
 
-
+    '''  相机坐标系为Opencv系，生成光线 
 # Ray helpers
+def get_rays(H, W, K, c2w):
+    X, Y = np.meshgrid(np.arange(W), np.arange(H))
+    # i = i.t()
+    # j = j.t()
+    XYZ = np.concatenate((X[:, :, None], Y[:, :, None], np.ones_like(X[:, :, None])), axis=-1)
+    XYZ = XYZ @ np.linalg.inv(K[:3, :3]).T
+    XYZ = torch.from_numpy(XYZ.astype(np.float32)).to('cuda')
+    XYZ = XYZ @ c2w[:3, :3].T
+    rays_d = XYZ.reshape(H,W,3)
+    # rays_o = np.broadcast_to(c2w[:3,-1], np.shape(rays_d))
+    rays_o = c2w[:3, -1].expand(rays_d.shape)
+
+    # dirs = torch.stack([(i-K[0][2])/K[0][0], -(j-K[1][2])/K[1][1], -torch.ones_like(i)], -1)
+    # # Rotate ray directions from camera frame to the world frame
+    # rays_d = torch.sum(dirs[..., np.newaxis, :] * c2w[:3,:3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]
+    # # Translate camera frame's origin to the world frame. It is the origin of all rays.
+    # rays_o = c2w[:3,-1].expand(rays_d.shape)
+    return rays_o, rays_d
+
+
+## 该函数用于生成光线
+def get_rays_np(H, W, K, c2w):
+    # 取出所有的2维像素点(i,j)
+    # i, j = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32), indexing='xy')
+    # # 将2维像素点（i,j） 反投影到 相机坐标系的 归一化平面
+    # dirs = np.stack([(i-K[0][2])/K[0][0], -(j-K[1][2])/K[1][1], -np.ones_like(i)], -1)
+    # # Rotate ray directions from camera frame to the world frame
+    # rays_d = np.sum(dirs[..., np.newaxis, :] * c2w[:3,:3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]
+    # # Translate camera frame's origin to the world frame. It is the origin of all rays.
+    # rays_o = np.broadcast_to(c2w[:3,-1], np.shape(rays_d))
+    X, Y = np.meshgrid(np.arange(W), np.arange(H))
+    # i = i.t()
+    # j = j.t()
+    XYZ = np.concatenate((X[:, :, None], Y[:, :, None], np.ones_like(X[:, :, None])), axis=-1)
+    XYZ = XYZ @ np.linalg.inv(K[:3, :3]).T
+    XYZ = XYZ @ c2w[:3, :3].T
+    rays_d = XYZ.reshape(H,W, 3)
+
+    rays_o = np.broadcast_to(c2w[:3,-1], np.shape(rays_d))
+
+
+    return rays_o, rays_d
+    '''
 def get_rays(H, W, K, c2w):
     i, j = torch.meshgrid(torch.linspace(0, W-1, W), torch.linspace(0, H-1, H))  # pytorch's meshgrid has indexing='ij'
     i = i.t()
@@ -162,11 +205,8 @@ def get_rays(H, W, K, c2w):
     return rays_o, rays_d
 
 
-## 该函数用于生成光线
 def get_rays_np(H, W, K, c2w):
-    # 取出所有的2维像素点(i,j)
     i, j = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32), indexing='xy')
-    # 将2维像素点（i,j） 反投影到 相机坐标系的 归一化平面
     dirs = np.stack([(i-K[0][2])/K[0][0], -(j-K[1][2])/K[1][1], -np.ones_like(i)], -1)
     # Rotate ray directions from camera frame to the world frame
     rays_d = np.sum(dirs[..., np.newaxis, :] * c2w[:3,:3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]

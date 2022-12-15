@@ -1,5 +1,5 @@
 expname = kitti360_test_binocular
-basedir = ./logs
+basedir = ./logsss
 datadir = /data/datasets/KITTI-360
 dataset_type = KITTI360
 

@@ -189,11 +189,14 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
 
         if savedir is not None:
             rgb8 = to8b(rgbs[-1])    ## rgb[-1] 表示最新生成的图像
-            dis8 = to8b(disps[-1] / np.max(disps))
+            pred_depth = cv.applyColorMap(
+                cv.convertScaleAbs(((disps[-1] / disps[-1].max()) * 255).astype(np.uint8), alpha=2),
+                cv.COLORMAP_JET)
+            # dis8 = to8b(disps[-1] / np.max(disps))
             filename = os.path.join(savedir, '{:03d}.png'.format(i))
             filename_dis = os.path.join(savedir,'{:03d}_dis.png'.format(i))
             imageio.imwrite(filename, rgb8)
-            imageio.imwrite(filename_dis,dis8)
+            imageio.imwrite(filename_dis,pred_depth)
 
 
 
@@ -393,9 +396,6 @@ def render_rays(ray_batch,
     rays_o, rays_d = ray_batch[:,0:3], ray_batch[:,3:6] # [N_rays, 3] each
 
 
-
-
-
     viewdirs = ray_batch[:,-3:] if ray_batch.shape[-1] > 8 else None   ## 归一化之后的 viewdir
     bounds = torch.reshape(ray_batch[...,6:8], [-1,1,2])
     near, far = bounds[...,0], bounds[...,1] # [-1,1]
@@ -453,6 +453,7 @@ def render_rays(ray_batch,
 
         z_vals, _ = torch.sort(torch.cat([z_vals, z_samples], -1), -1)
         pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples + N_importance, 3]
+        pts /= 100
 
         run_fn = network_fn if network_fine is None else network_fine
 #         raw = run_network(pts, fn=run_fn)
@@ -587,7 +588,7 @@ def config_parser():
                         help='frequency of tensorboard image logging')
     parser.add_argument("--i_weights", type=int, default=10000, 
                         help='frequency of weight ckpt saving')
-    parser.add_argument("--i_testset", type=int, default=50000, 
+    parser.add_argument("--i_testset", type=int, default=10000,
                         help='frequency of testset saving')
     parser.add_argument("--i_video",   type=int, default=50000, 
                         help='frequency of render_poses video saving')

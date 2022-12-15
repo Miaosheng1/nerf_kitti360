@@ -20,13 +20,13 @@ def load_kitti360_data(datadir, factor=8):
     render_pose = np.stack(poses[i] for i in i_test)
 
     '''     Visual Camera Pose 
-    
-    '''
     visualizer = CameraPoseVisualizer([-5, 5], [-5, 5], [0, 5])
     for i in np.arange(poses.shape[0]):
         if i % 1 == 0:
             visualizer.extrinsic2pyramid(poses[i])
     visualizer.show()
+    '''
+
 
 
     return poses,imgs,render_pose,[H,W,focal],i_test
@@ -85,7 +85,7 @@ def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
     image_00 = os.path.join(imgae_dir,'image_00/data_rect')
     image_01 = os.path.join(imgae_dir,'image_01/data_rect')
 
-    start_index = 505
+    start_index = 805
     num = 5
     all_images = []
     all_poses = []
@@ -114,7 +114,7 @@ def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
     c2w = np.stack(all_poses)
 
     '''Generate test file'''
-    i_test = np.array([3,4])
+    i_test = np.array([5,4])
 
     return c2w,imgs, K_00,i_test
 
@@ -125,6 +125,12 @@ def Normailize_T(poses):
             poses[i] = np.eye(4)
         else:
             poses[i] = np.dot(inv_pose,poses[i])
+
+    '''New Normalization '''
+    # scale = poses[-1,2,3]
+    # for i in range(poses.shape[0]):
+    #     poses[i,:3,3] = poses[i,:3,3]/scale
+    #     print(poses[i])
     return poses
 
 
