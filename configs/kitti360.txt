@@ -1,5 +1,5 @@
 expname = kitti360_test_binocular
-basedir = ./logsss
+basedir = ./logs_NEW_NORM
 datadir = /data/datasets/KITTI-360
 dataset_type = KITTI360
 
@@ -7,6 +7,7 @@ no_batching = False
 use_viewdirs = True
 white_bkgd = False
 lrate_decay = 500
+render_test = True
 
 N_samples = 64
 N_importance = 128

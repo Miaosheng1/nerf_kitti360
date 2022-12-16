@@ -148,7 +148,7 @@ class NeRF(nn.Module):
         self.alpha_linear.bias.data = torch.from_numpy(np.transpose(weights[idx_alpha_linear+1]))
 
 
-    '''  相机坐标系为Opencv系，生成光线 
+
 # Ray helpers
 def get_rays(H, W, K, c2w):
     X, Y = np.meshgrid(np.arange(W), np.arange(H))
@@ -192,7 +192,10 @@ def get_rays_np(H, W, K, c2w):
 
 
     return rays_o, rays_d
-    '''
+
+
+
+    '''  相机坐标系为OpenGL系，生成光线 
 def get_rays(H, W, K, c2w):
     i, j = torch.meshgrid(torch.linspace(0, W-1, W), torch.linspace(0, H-1, H))  # pytorch's meshgrid has indexing='ij'
     i = i.t()
@@ -213,7 +216,7 @@ def get_rays_np(H, W, K, c2w):
     # Translate camera frame's origin to the world frame. It is the origin of all rays.
     rays_o = np.broadcast_to(c2w[:3,-1], np.shape(rays_d))
     return rays_o, rays_d
-
+    '''
 
 def ndc_rays(H, W, focal, near, rays_o, rays_d):
     # Shift ray origins to near plane
@@ -295,3 +298,10 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
     samples = bins_g[...,0] + t * (bins_g[...,1]-bins_g[...,0])
 
     return samples
+
+def psnr_cal(img1,img2):
+    mse = np.mean((img1 - img2) ** 2)
+    if mse == 0:
+        return 100
+    PIXEL_MAX = 255.0
+    return 20 * np.log10(PIXEL_MAX / np.sqrt(mse))

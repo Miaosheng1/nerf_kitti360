@@ -1,6 +1,6 @@
 import os, sys
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import numpy as np
 import imageio
 import json
@@ -170,6 +170,8 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
 
     rgbs = []
     disps = []
+    gt = []
+
 
     t = time.time()
     for i, c2w in enumerate(tqdm(render_poses)):
@@ -178,24 +180,27 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
         rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], **render_kwargs)
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
+        gt.append(gt_imgs[i].cpu().numpy())
         if i==0:
             print(rgb.shape, disp.shape)
 
-        """
+
         if gt_imgs is not None and render_factor==0:
-            p = -10. * np.log10(np.mean(np.square(rgb.cpu().numpy() - gt_imgs[i])))
-            print(p)
-        """
+            p = -10. * np.log10(np.mean(np.square(rgb.cpu().numpy() - gt[i])))
+            print(f"PSNR value : {p}")
+
 
         if savedir is not None:
             rgb8 = to8b(rgbs[-1])    ## rgb[-1] 表示最新生成的图像
-            pred_depth = cv.applyColorMap(
-                cv.convertScaleAbs(((disps[-1] / disps[-1].max()) * 255).astype(np.uint8), alpha=2),
-                cv.COLORMAP_JET)
+            gt[i] = to8b(gt[-1])  ## rgb[-1] 表示最新生成的图像
+            pred_depth = cv.applyColorMap(cv.convertScaleAbs(((disps[-1] / disps[-1].max()) * 255).astype(np.uint8), alpha=2),cv.COLORMAP_JET)
             # dis8 = to8b(disps[-1] / np.max(disps))
             filename = os.path.join(savedir, '{:03d}.png'.format(i))
+            filename_gt = os.path.join(savedir, '{:03d}_gt.png'.format(i))
             filename_dis = os.path.join(savedir,'{:03d}_dis.png'.format(i))
+
             imageio.imwrite(filename, rgb8)
+            imageio.imwrite(filename_gt, gt[i])
             imageio.imwrite(filename_dis,pred_depth)
 
 
@@ -432,7 +437,7 @@ def render_rays(ray_batch,
     ## r = o + t * d
     ''' For Kitti360'''
     pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples, 3]，pts 是每一条 ray 上的采样点的坐标
-    pts /= 100
+    # pts /= 100
     # from camera_pose_visualizer import CameraPoseVisualizer
     # visualizer = CameraPoseVisualizer([-5, 5], [-5, 5], [-5, 5])
     # visualizer.pts_visualize(pts.detach().cpu().numpy())
@@ -453,7 +458,7 @@ def render_rays(ray_batch,
 
         z_vals, _ = torch.sort(torch.cat([z_vals, z_samples], -1), -1)
         pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples + N_importance, 3]
-        pts /= 100
+        # pts /= 100
 
         run_fn = network_fn if network_fine is None else network_fine
 #         raw = run_network(pts, fn=run_fn)
@@ -651,7 +656,7 @@ def train():
         # for idx in i_train:
         #     cv.imwrite(f'train/train{idx}.png', images[idx] * 255)
         # render_poses = poses[i_train[:5]]
-        near, far = 2., 100.
+        near, far = 0., 6.
 
 
     elif args.dataset_type == 'blender':
@@ -673,23 +678,6 @@ def train():
             images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
         else:
             images = images[...,:3]
-
-    # elif args.dataset_type == 'deepvoxels':
-    #
-    #     images, poses, render_poses, hwf, i_split = load_dv_data(scene=args.shape,
-    #                                                              basedir=args.datadir,
-    #                                                              testskip=args.testskip)
-    #
-    #     print('Loaded deepvoxels', images.shape, render_poses.shape, hwf, args.datadir)
-    #     i_train, i_val, i_test = i_split
-    #
-    #     hemi_R = np.mean(np.linalg.norm(poses[:,:3,-1], axis=-1))
-    #     near = hemi_R-1.
-    #     far = hemi_R+1.
-    #
-    # else:
-    #     print('Unknown dataset type', args.dataset_type, 'exiting')
-    #     return
 
     # Cast intrinsics to right types
     H, W, focal = hwf
@@ -745,6 +733,14 @@ def train():
                 # Default is smoother render_poses path
                 images = None
 
+            testsavedir = os.path.join(basedir, expname, 'renderonly_{}_{:06d}'.format('test' if args.render_test else 'path', start))
+            os.makedirs(testsavedir, exist_ok=True)
+            print('test poses shape', render_poses.shape)
+
+            rgbs, disp = render_path(render_poses, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images, savedir=testsavedir, render_factor=args.render_factor)
+
+            print('Done rendering', testsavedir)
+
             ## For sythetic lego Extract Mesh
             # NeRF = render_kwargs_test['network_fine']
             # N, chunk = 256, 1024*64
@@ -772,20 +768,6 @@ def train():
             # print('done', vertices.shape, triangles.shape)
             # mesh = trimesh.Trimesh(vertices, triangles)
             # mesh.export('export_mesh.ply')
-
-
-
-
-            testsavedir = os.path.join(basedir, expname, 'renderonly_{}_{:06d}'.format('test' if args.render_test else 'path', start))
-            os.makedirs(testsavedir, exist_ok=True)
-            print('test poses shape', render_poses.shape)
-
-            rgbs, disp = render_path(render_poses, hwf, K, args.chunk, render_kwargs_test, gt_imgs=images, savedir=testsavedir, render_factor=args.render_factor)
-            print('Done rendering', testsavedir)
-
-
-
-
 
             return
 
@@ -819,7 +801,7 @@ def train():
         rays_rgb = torch.Tensor(rays_rgb).to(device)
 
 
-    N_iters = 100000 + 1
+    N_iters = 200000 + 1
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
@@ -893,22 +875,6 @@ def train():
                 'optimizer_state_dict': optimizer.state_dict(),
             }, path)
             print('Saved checkpoints at', path)
-
-        if i%args.i_video==0 and i > 0:
-            # Turn on testing mode
-            with torch.no_grad():
-                rgbs, disps = render_path(render_poses, hwf, K, args.chunk, render_kwargs_test)
-            print('Done, saving', rgbs.shape, disps.shape)
-            moviebase = os.path.join(basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
-            # imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
-            # imageio.mimwrite(moviebase + 'disp.mp4', to8b(disps / np.max(disps)), fps=30, quality=8)
-
-            # if args.use_viewdirs:
-            #     render_kwargs_test['c2w_staticcam'] = render_poses[0][:3,:4]
-            #     with torch.no_grad():
-            #         rgbs_still, _ = render_path(render_poses, hwf, args.chunk, render_kwargs_test)
-            #     render_kwargs_test['c2w_staticcam'] = None
-                # imageio.mimwrite(moviebase + 'rgb_still.mp4', to8b(rgbs_still), fps=30, quality=8)
 
 
         ## 每过 训练 5000次，则进行一次Test

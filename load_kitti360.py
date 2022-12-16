@@ -85,8 +85,8 @@ def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
     image_00 = os.path.join(imgae_dir,'image_00/data_rect')
     image_01 = os.path.join(imgae_dir,'image_01/data_rect')
 
-    start_index = 805
-    num = 5
+    start_index = 3353
+    num = 8
     all_images = []
     all_poses = []
 
@@ -114,7 +114,7 @@ def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
     c2w = np.stack(all_poses)
 
     '''Generate test file'''
-    i_test = np.array([5,4])
+    i_test = np.array([4,10])
 
     return c2w,imgs, K_00,i_test
 
@@ -127,10 +127,11 @@ def Normailize_T(poses):
             poses[i] = np.dot(inv_pose,poses[i])
 
     '''New Normalization '''
-    # scale = poses[-1,2,3]
-    # for i in range(poses.shape[0]):
-    #     poses[i,:3,3] = poses[i,:3,3]/scale
-    #     print(poses[i])
+    scale = poses[-1,2,3]
+    print(f"scale:{scale}\n")
+    for i in range(poses.shape[0]):
+        poses[i,:3,3] = poses[i,:3,3]/scale
+        print(poses[i])
     return poses
 
 
