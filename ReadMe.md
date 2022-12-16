@@ -15,4 +15,6 @@
 ***
 ## Camera_Pose.py 是将相机的外参位姿使用matpltLib 绘制出来进行可视化的
 
-
+## 遇到的Bug
+* kitti360 的pose 矩阵中用到的相机坐标系是 Opencv系，Nerf 中原本生成的光线Code 是按照OpenGL系写的，因此需要修改get_ray 函数
+* 不同的Kitti360的序列集的 PSNR 不一样，选择 start_index = 3353 附近，PSnr 可以训练到25左右。testview 的PSNR 可以训练到21左右
