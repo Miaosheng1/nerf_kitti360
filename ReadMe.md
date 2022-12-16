@@ -6,12 +6,17 @@
 >├── cam0_to_world.txt  
 >└── perspective.txt  
 
-1. *perspective.txt* 存放 相机内参矩阵  
-2. *cam0_to_world.txt* 存放 相机到世界系的位子变换矩阵T  
+单目：
+1. *perspective.txt* 存放 相机0 1内参矩阵  
+2. *cam0_to_world.txt* 存放 相机0到世界系的位子变换矩阵T  
 3. *2013_05_28_drive_0000_sync* 存放RGB 图像  
 **输出位姿pose、 images、 render_pose、 hwf、 itest 等返回值**  
 设定：Near=0 Far=100
 
+双目：
+需要读取kitti360的pose.txt 文件 和 cam1topose.txt 文件，才能求出cam1toworld 的变换矩阵
+
+*目前的代码是按照双目去写的*
 ***
 ## Camera_Pose.py 是将相机的外参位姿使用matpltLib 绘制出来进行可视化的
 
