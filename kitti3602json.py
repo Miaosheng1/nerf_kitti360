@@ -23,32 +23,40 @@ def tojson(poses,focal,imgs):
             matrix_list.append(list(row))
         return matrix_list
 
-    spilts = ['train','val']
-    skip_spilt={
-        'train':1,
-        'val':3
-    }
+    # spilts = ['train','val']
+    # skip_spilt={
+    #     'train':1,
+    #     'val':3
+    # }
 
 
-    for spilt in spilts:
-        out_data = {'camera_angle_x': 1.8107}
-        out_data['frames'] = []
+    # for spilt in spilts:
+    out_data = {
+        'fl_x': focal,
+        'fl_y': focal,
+        'cx': 0.5 * imgs[0].shape[1],
+        'cy': 0.5 * imgs[0].shape[0],
+        'w': imgs[0].shape[1],
+        'h': imgs[0].shape[0],
+        'aabb_scale': 16}
+    out_data['frames'] = []
 
-        os.makedirs(spilt, exist_ok=True)
+    # os.makedirs("kitti360", exist_ok=True)
+    os.makedirs("kitti360/images",exist_ok=True)
 
-        for i in range(0,poses.shape[0],skip_spilt[spilt]):
+    for i in range(0,poses.shape[0]):
 
-            frame_data = {
-                'file_path': './'+ spilt + '/r_' + str(i),
-                'transform_matrix': listify_matrix(poses[i])
-            }
-            filename =os.path.join(spilt,'r_'+ str(i))+".png"
-            imageio.imwrite(filename,imgs[i])
+        frame_data = {
+            'file_path': './images/' + str(i)+".png",
+            'transform_matrix': listify_matrix(poses[i])
+        }
+        filename ='kitti360/images/'+ str(i)+".png"
+        imageio.imwrite(filename,imgs[i])
 
-            out_data['frames'].append(frame_data)
+        out_data['frames'].append(frame_data)
 
-        with open(f'transforms_{spilt}.json', 'w') as out_file:
-            json.dump(out_data, out_file, indent=4)
+    with open(f'transforms.json', 'w') as out_file:
+        json.dump(out_data, out_file, indent=4)
 
 
 
@@ -106,7 +114,7 @@ def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
     image_01 = os.path.join(imgae_dir,'image_01/data_rect')
 
     start_index = 3353
-    num = 8
+    num = 10
     all_images = []
     all_poses = []
 
@@ -139,7 +147,7 @@ def Normailize_T(poses):
 
     '''New Normalization '''
     scale = poses[-1,2,3]
-    print(f"scale:{scale}\n")
+    print(f"CG 系的坐标pose: scale:{scale}\n")
     for i in range(poses.shape[0]):
         poses[i,:3,3] = poses[i,:3,3]/scale
         poses[i,:3,:3] = poses[i,:3,:3] * np.array([1, -1, -1])  ## opencv2openGL
