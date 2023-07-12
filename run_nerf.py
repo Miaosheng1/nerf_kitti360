@@ -763,7 +763,8 @@ def train():
             # import mcubes
             # import trimesh
             # threshold = 50.
-            #
+            
+            # 大于这个 threshold 的 density 都会被提取， 而不是只在50附近提取
             # vertices, triangles = mcubes.marching_cubes(density.reshape(257,257,-1), threshold)
             # print('done', vertices.shape, triangles.shape)
             # mesh = trimesh.Trimesh(vertices, triangles)
